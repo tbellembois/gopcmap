@@ -1,0 +1,41 @@
+{
+    "main": {
+         "winrmPort": 5986,
+         "winrmHTTPS": true,
+         "winrmInsecure": true,
+         "winrmTimeout": 0,
+         "winrmUser": "administrateur",
+         "winrmPass": "mysecurepass",
+         "sshTimeout": 0,
+         "sshPort": 22,
+         "sshPem": "./id_rsa.pem"
+    },
+    "dpts": [
+        {
+            "title": "département info",
+            "machines": [
+                { "name": "iutclinfa10", "nb": 18 },
+                { "name": "iutclinfa12", "nb": 10 },
+                { "name": "iutclinfa18", "nb": 18 },
+                { "name": "iutclinfa19", "nb": 10 },
+                { "name": "iutclinfa23", "nb": 18 },
+                { "name": "iutclinfb10", "nb": 9 },
+                { "name": "iutclinfb12", "nb": 10 },
+                { "name": "iutclinfb18", "nb": 10 },
+                { "name": "iutclinfb19", "nb": 10 },
+                { "name": "iutclinfb20", "nb": 10 },
+                { "name": "iutclinfc21", "nb": 10 }
+           ]
+        },
+        {
+            "title": "département rt",
+            "machines": [
+                { "name": "iutclrtc5", "nb": 15 },
+                { "name": "iutclrtb3", "nb": 15 },
+                { "name": "iutclrtb6", "nb": 15 },
+                { "name": "iutclrtb8", "nb": 15 },
+                { "name": "iutclrta15", "nb": 1 }
+           ]
+        }
+    ]
+}

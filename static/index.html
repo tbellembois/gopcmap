@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="x-ua-compatible" content="ie=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+
+  <title>goiutmap</title>
+  
+  <link rel="stylesheet" href="css/font-awesome/css/font-awesome.min.css">
+  <link rel="stylesheet" href="css/main.css">
+
+</head>
+
+<body>
+
+    <div id=content>
+
+    <div id="title">IUT map</div>
+
+    <div id=advice>ne pas recharger la page en cours de chargement</div>
+    {{range .Conf.Dpts}}
+    <div id="dpt">
+        <div class="dname">{{.Title}}</div>
+        <div id="rooms">
+                {{range .Machines}}
+                <div class="room" id="{{.Name}}">
+                    <div class="room fa fa-map-marker">
+                        <span class="rname">{{.Name}}
+                            <a title="reload" id="load{{.Name}}" onclick="loadRoom({{.Name}});">
+                                <i class="fa fa-spinner reloader" aria-hidden="true"></i>
+                            </a>
+                        </span>
+                    </div>
+                    <div id="{{.Name}}children" class="machines">
+                    </div>
+                </div>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+
+    <script>
+    // HTML elements    
+    var body = document.getElementById("content");
+    var machines = document.getElementById("machines");
+
+    // websocket
+    if (window.WebSocket === undefined) {
+        $("#content").append("your browser does not support WebSockets");
+    } else {
+        if (window.location.protocol == "https:") {
+            wsproto = "wss";
+        } else {
+            wsproto = "ws";
+        }
+        url = wsproto + "://{{.Address}}:{{.Port}}/socket/";
+        
+        var wsock = new WebSocket(url);
+        wsock.onopen = function(evt) {
+            console.log("connected to web socket:" + url);
+            {{range .Conf.Dpts}}
+                {{range .Machines}}
+                    loadRoom({{.Name}});
+                {{end}}
+            {{end}}
+        };
+        wsock.onclose = function(evt) {
+            console.log("web socket closed");
+        };
+        wsock.onmessage = function(evt) {
+             var json = JSON.parse(evt.data);
+             var mtype = json.type;
+             var mname = json.Mach.name;
+             var mos = json.Mach.os;
+             var mroom = json.Mach.room;
+             console.log(json);
+             console.log(mtype);
+             console.log(mname);
+             console.log(mos);
+             console.log(mroom);
+
+             roomDiv = document.getElementById(mroom + "children");
+
+             switch(mtype) {
+                 case "room":
+                     roomDiv.appendChild(createRoomElement(mname));
+                     break;
+                 case "end":
+                     body.className = "";
+                     break;
+                 case "machine":
+                     switch(mos) {
+                         case "windows":
+                             el = createMachineElement(mname, mos);
+                             roomDiv.appendChild(el);
+                             fadeIn(el);
+                             break;
+                         case "linux":
+                             el = createMachineElement(mname, mos);
+                             roomDiv.appendChild(el);
+                             fadeIn(el);
+                             break;
+                         case "unknown":
+                             mos = "question-circle";
+                             el = createMachineElement(mname, mos);
+                             roomDiv.appendChild(el);
+                             fadeIn(el);
+                             break;
+                         case "down":
+                             mos = "ban";
+                             el = createMachineElement(mname, mos);
+                             roomDiv.appendChild(el);
+                             fadeIn(el);
+                             break;
+                     }
+                     break;
+             }
+         };
+    }
+
+    // fade in function
+    function fadeIn(el) {
+      el.style.opacity = 0;
+      var tick = function() {
+        el.style.opacity = +el.style.opacity + 0.01;
+        if (+el.style.opacity < 1) {
+          (window.requestAnimationFrame && requestAnimationFrame(tick)) || setTimeout(tick, 16)
+        }
+      };
+      tick();
+    }
+    // creates a machine div
+    function createMachineElement(name, os) {
+        var elem = document.createElement('div');
+        elem.className = "machine";
+        var mname = document.createElement('div');
+        mname.className = "name";
+        mname.innerHTML = name;
+        var mos = document.createElement('i');
+        mos.innerHTML = "&nbsp;";
+        mos.className = "fa fa-" + os;
+
+        elem.appendChild(mos);
+        elem.appendChild(mname);
+        return elem
+    }
+    function loadRoom(rname) {
+        console.log("loadRoom " + rname);
+        
+        var roomDiv = document.getElementById(rname + "children");
+        roomDiv.innerHTML = "";
+
+        // requesting the room machines
+        wsock.send(JSON.stringify({ Name: rname }));
+    };
+    function eventFire(el, etype){
+      if (el.fireEvent) {
+        el.fireEvent('on' + etype);
+      } else {
+        var evObj = document.createEvent('Events');
+        evObj.initEvent(etype, true, false);
+        el.dispatchEvent(evObj);
+      }
+    }
+    </script>
+</body>
+</html>
