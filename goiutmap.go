@@ -26,14 +26,10 @@ const (
 )
 
 var (
-	// Address of the server
-	Address string
-	// Port of the server
-	Port     string
 	err      error
 	exitCode int
 	// Conf is the json configuration
-	Conf Configuration
+	Conf Config
 	// websocket
 	upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -48,18 +44,20 @@ var (
 )
 
 // json configuration
-type Configuration struct {
-	Main ConfigurationMain  `json:"main"`
-	Dpts []ConfigurationDpt `json:"dpts"`
+type Config struct {
+	Main ConfigMain  `json:"main"`
+	Dpts []ConfigDpt `json:"dpts"`
 }
-type ConfigurationMain struct {
+type ConfigMain struct {
+	Address string // not in conf file, set up in init
+	Port    string // not in conf file, set up in init
 }
-type ConfigurationDpt struct {
-	Title      string     `json:"title"`
-	Connection ConnC      `json:"connection"`
-	Machines   []MachineC `json:"machines"`
+type ConfigDpt struct {
+	Title      string       `json:"title"`
+	Connection ConfigConn   `json:"connection"`
+	Machines   []ConfigMach `json:"machines"`
 }
-type ConnC struct {
+type ConfigConn struct {
 	WinrmPort     int           `json:"winrmPort"`
 	WinrmHTTPS    bool          `json:"winrmHTTPS"`
 	WinrmInsecure bool          `json:"winrmInsecure"`
@@ -71,7 +69,7 @@ type ConnC struct {
 	SshUser       string        `json:"sshUser"`
 	SshPem        string        `json:"sshPem"`
 }
-type MachineC struct {
+type ConfigMach struct {
 	Name string `json:"name"`
 	Nb   int    `json:"nb"`
 }
@@ -87,13 +85,6 @@ type Machine struct {
 type Room struct {
 	Name   string `json:"name"`
 	NbMach int    `json:"nbmach"`
-}
-
-// Param is sent to the view by JSON at the first load
-type Param struct {
-	Address string
-	Port    string
-	Conf    *Configuration
 }
 
 // Response is a structure sent to the view by JSON by web socket
@@ -171,7 +162,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 		// searching for the room nb of machines and connection info
 		nbmach := 0
-		var conn ConnC
+		var conn ConfigConn
 
 		for _, d := range Conf.Dpts {
 			for _, m := range d.Machines {
@@ -197,7 +188,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 		// looping throught the machines
 		for i := 01; i <= nbmach; i++ {
 
-			go func(machine int, room string, conn *ConnC, wss *WSReaderWriter) {
+			go func(machine int, room string, conn *ConfigConn, wss *WSReaderWriter) {
 
 				var err error
 
@@ -305,7 +296,6 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 func MainHandler(w http.ResponseWriter, r *http.Request) {
 	staticBox := rice.MustFindBox("static")
-	p := Param{Address: Address, Port: Port, Conf: &Conf}
 
 	// Building the HTML template.
 	htmlTplString, err := staticBox.String("index.html")
@@ -313,7 +303,7 @@ func MainHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = htmlTmp.Execute(w, p)
+	err = htmlTmp.Execute(w, Conf)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -341,10 +331,10 @@ func main() {
 	address := flag.String("address", "localhost", "server address")
 	port := flag.String("port", "8080", "the port to listen")
 	flag.Parse()
-	Address = *address
-	Port = *port
+	Conf.Main.Address = *address
+	Conf.Main.Port = *port
 
-	fmt.Printf("address: %s port: %s", Address, Port)
+	fmt.Printf("address: %s port: %s", Conf.Main.Address, Conf.Main.Port)
 
 	cssBox := rice.MustFindBox("static/css")
 	cssFileServer := http.StripPrefix("/css/", http.FileServer(cssBox.HTTPBox()))
@@ -356,7 +346,7 @@ func main() {
 	http.HandleFunc("/socket/", SocketHandler)
 	http.HandleFunc("/", MainHandler)
 
-	if err = http.ListenAndServe(Address+":"+Port, nil); err != nil {
+	if err = http.ListenAndServe(Conf.Main.Address+":"+Conf.Main.Port, nil); err != nil {
 		panic(err)
 	}
 }

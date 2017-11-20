@@ -22,7 +22,7 @@
 
     <div id="title">IUT map</div>
 
-    {{range .Conf.Dpts}}
+    {{range .Dpts}}
     <div id="dpt">
         <div class="dname">{{.Title}}</div>
         <div id="rooms">
@@ -64,12 +64,12 @@
         } else {
             wsproto = "ws";
         }
-        url = wsproto + "://{{.Address}}:{{.Port}}/socket/";
+        url = wsproto + "://{{.Main.Address}}:{{.Main.Port}}/socket/";
         
         var wsock = new WebSocket(url);
         wsock.onopen = function(evt) {
             console.log("connected to web socket:" + url);
-            {{range .Conf.Dpts}}
+            {{range .Dpts}}
                 {{range .Machines}}
                     loadRoom({{.Name}});
                 {{end}}
