@@ -203,7 +203,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "down", Room: room}}
 					myJSON, err := json.Marshal(Resp)
 					if err != nil {
-						fmt.Println(err)
+						fmt.Println("json marshal error " + err.Error())
+						return
 					}
 					wss.Send(myJSON)
 					return
@@ -228,6 +229,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "windows", Room: room}}
 					myJSON, err := json.Marshal(Resp)
 					if err != nil {
+						fmt.Println("json marshal error " + err.Error())
+						return
 					}
 					wss.Send(myJSON)
 					fmt.Printf("  -> windows\n")
@@ -252,33 +255,44 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
 					myJSON, err := json.Marshal(Resp)
 					if err != nil {
+						fmt.Println("json marshal error " + err.Error())
+						return
 					}
 					wss.Send(myJSON)
+					fmt.Printf("  -> not linux (ssh dial error) " + err.Error() + "\n")
 					return
 				}
 				if sshSession, err = sshClient.NewSession(); err != nil {
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "linux", Room: room}}
+					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
 					myJSON, err := json.Marshal(Resp)
 					if err != nil {
+						fmt.Println("json marshal error " + err.Error())
+						return
 					}
 					wss.Send(myJSON)
+					fmt.Printf("  -> not linux (ssh session error) " + err.Error() + "\n")
 					return
 				}
 				if err = sshSession.Run("ls"); err != nil {
 					// can not run command - machine probably under Linux
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "linux", Room: room}}
+					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
 					myJSON, err := json.Marshal(Resp)
 					if err != nil {
+						fmt.Println("json marshal error " + err.Error())
+						return
 					}
 					wss.Send(myJSON)
+					fmt.Printf("  -> not linux (ssh remote command error) " + err.Error() + "\n")
 					return
 				}
 				// returning the JSON
 				Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "linux", Room: room}}
 				myJSON, err := json.Marshal(Resp)
 				if err != nil {
+					fmt.Println("json marshal error " + err.Error())
+					return
 				}
 				wss.Send(myJSON)
 				fmt.Printf("  -> linux\n")
