@@ -34,7 +34,7 @@ var (
 	Port     string
 	err      error
 	exitCode int
-	// json configuration
+	// Conf is the json configuration
 	Conf Configuration
 	// websocket
 	upgrader = websocket.Upgrader{
@@ -45,18 +45,6 @@ var (
 	wsconn *websocket.Conn
 	wserr  error
 
-	// winrm parameters
-	winrmPort     int
-	winrmHTTPS    bool
-	winrmInsecure bool
-	winrmTimeout  time.Duration
-	winrmUser     string
-	winrmPass     string
-	// ssh parameters
-	sshTimeout time.Duration
-	sshPort    int
-	sshPem     string
-
 	// Resp is passed to the view
 	Resp Response
 
@@ -64,10 +52,15 @@ var (
 	winrmClient *winrm.Client
 	sshClient   *ssh.Client
 	sshSession  *ssh.Session
+	sshConfig   *ssh.ClientConfig
 )
 
 // json configuration
 type Configuration struct {
+	Main ConfigurationMain  `json:"main"`
+	Dpts []ConfigurationDpt `json:"dpts"`
+}
+type ConfigurationMain struct {
 	WinrmPort     int           `json:"winrmPort"`
 	WinrmHTTPS    bool          `json:"winmlHTTPS"`
 	WinrmInsecure bool          `json:"winrmInsecure"`
@@ -76,10 +69,10 @@ type Configuration struct {
 	WinrmPass     string        `json:"winrmPass"`
 	SshTimeout    time.Duration `json:"sshTimeout"`
 	SshPort       int           `json:"sshPort"`
+	SshUser       string        `json:"sshUser"`
 	SshPem        string        `json:"sshPem"`
-	Dpts          []DptC        `json:"dpts"`
 }
-type DptC struct {
+type ConfigurationDpt struct {
 	Title    string     `json:"title"`
 	Machines []MachineC `json:"machines"`
 }
@@ -213,8 +206,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// trying a windows connection
 				fmt.Printf("  windows test\n")
-				endpoint := winrm.NewEndpoint(cname, winrmPort, winrmHTTPS, winrmInsecure, nil, nil, nil, winrmTimeout)
-				if winrmClient, err = winrm.NewClient(endpoint, winrmUser, winrmPass); err != nil {
+				endpoint := winrm.NewEndpoint(cname, Conf.Main.WinrmPort, Conf.Main.WinrmHTTPS, Conf.Main.WinrmInsecure, nil, nil, nil, Conf.Main.WinrmTimeout)
+				if winrmClient, err = winrm.NewClient(endpoint, Conf.Main.WinrmUser, Conf.Main.WinrmPass); err != nil {
 					panic(err)
 				}
 
@@ -239,17 +232,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// trying a linux connection
 				fmt.Printf("  linux test\n")
-				sshConfig := &ssh.ClientConfig{
-					User: "root",
-					Auth: []ssh.AuthMethod{
-						PublicKeyFile("./id_rsa.pem"),
-					},
-					Timeout: sshTimeout,
-					HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-						return nil
-					},
-				}
-				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, sshPort), sshConfig); err != nil {
+				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, Conf.Main.SshPort), sshConfig); err != nil {
 					// can not dial - machine unknown
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
@@ -331,15 +314,18 @@ func init() {
 		panic(err)
 	}
 
-	winrmPort = Conf.WinrmPort
-	winrmHTTPS = Conf.WinrmHTTPS
-	winrmInsecure = Conf.WinrmInsecure
-	winrmTimeout = Conf.WinrmTimeout
-	winrmUser = Conf.WinrmUser
-	winrmPass = Conf.WinrmPass
-	sshTimeout = Conf.SshTimeout
-	sshPort = Conf.SshPort
-	sshPem = Conf.SshPem
+	fmt.Println(Conf.Main.WinrmPort)
+
+	sshConfig = &ssh.ClientConfig{
+		User: Conf.Main.SshUser,
+		Auth: []ssh.AuthMethod{
+			PublicKeyFile(Conf.Main.SshPem),
+		},
+		Timeout: Conf.Main.SshTimeout,
+		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+			return nil
+		},
+	}
 
 }
 
