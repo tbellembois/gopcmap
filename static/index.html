@@ -10,7 +10,10 @@
   
   <link rel="stylesheet" href="css/font-awesome/css/font-awesome.min.css">
   <link rel="stylesheet" href="css/main.css">
-
+  <link rel="stylesheet" href="css/bootstrap.min.css">
+  <script src="js/jquery.min.js"></script>
+  <script src="js/popper.min.js"></script>
+  <script src="js/bootstrap.min.js"></script>
 </head>
 
 <body>
@@ -19,20 +22,26 @@
 
     <div id="title">IUT map</div>
 
-    <div id=advice>ne pas recharger la page en cours de chargement</div>
     {{range .Conf.Dpts}}
     <div id="dpt">
         <div class="dname">{{.Title}}</div>
         <div id="rooms">
                 {{range .Machines}}
                 <div class="room" id="{{.Name}}">
-                    <div class="room fa fa-map-marker">
+                    <input id="nb{{.Name}}" type="hidden" value="{{.Nb}}"></input>
+
+                    <div class="progress">
+                        <div id="progress{{.Name}}" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="{{.Nb}}">0/{{.Nb}}</div>
+                    </div>
+
+                    <div class="room">
                         <span class="rname">{{.Name}}
                             <a title="reload" id="load{{.Name}}" onclick="loadRoom({{.Name}});">
-                                <i class="fa fa-spinner reloader" aria-hidden="true"></i>
+                                <i class="fa fa-refresh reloader" aria-hidden="true"></i>
                             </a>
                         </span>
                     </div>
+
                     <div id="{{.Name}}children" class="machines">
                     </div>
                 </div>
@@ -75,21 +84,15 @@
              var mname = json.Mach.name;
              var mos = json.Mach.os;
              var mroom = json.Mach.room;
-             console.log(json);
-             console.log(mtype);
-             console.log(mname);
-             console.log(mos);
-             console.log(mroom);
+             //console.log(json);
+             //console.log(mtype);
+             //console.log(mname);
+             //console.log(mos);
+             //console.log(mroom);
 
              roomDiv = document.getElementById(mroom + "children");
 
              switch(mtype) {
-                 case "room":
-                     roomDiv.appendChild(createRoomElement(mname));
-                     break;
-                 case "end":
-                     body.className = "";
-                     break;
                  case "machine":
                      switch(mos) {
                          case "windows":
@@ -115,6 +118,7 @@
                              fadeIn(el);
                              break;
                      }
+                     updateProgress(mroom);
                      break;
              }
          };
@@ -146,10 +150,46 @@
         elem.appendChild(mname);
         return elem
     }
+    function resetProgress(rname) { 
+        var pelem = document.getElementById("progress" + rname);
+        var nelem = document.getElementById("nb" + rname);
+        // nb total machines for the room
+        var tmach = parseInt(nelem.getAttribute("value"));
+
+        pelem.setAttribute("aria-valuenow", 0);
+        pelem.style.width = "0%";
+        pelem.innerHTML = "0/" + tmach;
+    }
+    function updateProgress(rname) {
+        var pelem = document.getElementById("progress" + rname);
+        var nelem = document.getElementById("nb" + rname);
+        // absolute number of machines processed
+        var v1 = parseInt(pelem.getAttribute("aria-valuenow"));
+        // nb total machines for the room
+        var tmach = parseInt(nelem.getAttribute("value"));
+
+        // show progress if hidden
+        pelem.style.display = "";
+
+        // new absolute number of machines
+        vabs = v1 + 1;
+        // percent number of machines
+        vpercent = vabs * 100 / tmach;
+
+        // update progress bar
+        pelem.setAttribute("aria-valuenow", vabs);
+        pelem.style.width = vpercent + "%";
+        pelem.innerHTML = vabs + "/" + tmach;
+
+        // hide when fihished
+        if ( vabs == tmach) {
+            pelem.style.display = "none";
+        }
+    }    
     function loadRoom(rname) {
-        console.log("loadRoom " + rname);
-        
         var roomDiv = document.getElementById(rname + "children");
+        
+        resetProgress(rname);
         roomDiv.innerHTML = "";
 
         // requesting the room machines

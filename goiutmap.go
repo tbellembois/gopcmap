@@ -23,8 +23,6 @@ import (
 const (
 	// message type transmitted to the view
 	respMachine = "machine"
-	respRoom    = "room"
-	respEnd     = "end"
 )
 
 var (
@@ -47,12 +45,6 @@ var (
 
 	// Resp is passed to the view
 	Resp Response
-
-	// winrm and ssh connections
-	winrmClient *winrm.Client
-	sshClient   *ssh.Client
-	sshSession  *ssh.Session
-	sshConfig   *ssh.ClientConfig
 )
 
 // json configuration
@@ -61,6 +53,13 @@ type Configuration struct {
 	Dpts []ConfigurationDpt `json:"dpts"`
 }
 type ConfigurationMain struct {
+}
+type ConfigurationDpt struct {
+	Title      string     `json:"title"`
+	Connection ConnC      `json:"connection"`
+	Machines   []MachineC `json:"machines"`
+}
+type ConnC struct {
 	WinrmPort     int           `json:"winrmPort"`
 	WinrmHTTPS    bool          `json:"winrmHTTPS"`
 	WinrmInsecure bool          `json:"winrmInsecure"`
@@ -71,10 +70,6 @@ type ConfigurationMain struct {
 	SshPort       int           `json:"sshPort"`
 	SshUser       string        `json:"sshUser"`
 	SshPem        string        `json:"sshPem"`
-}
-type ConfigurationDpt struct {
-	Title    string     `json:"title"`
-	Machines []MachineC `json:"machines"`
 }
 type MachineC struct {
 	Name string `json:"name"`
@@ -94,14 +89,14 @@ type Room struct {
 	NbMach int    `json:"nbmach"`
 }
 
-// Param is passed to the template
+// Param is sent to the view by JSON at the first load
 type Param struct {
 	Address string
 	Port    string
 	Conf    *Configuration
 }
 
-// Response is a structure sent to the view by JSON
+// Response is a structure sent to the view by JSON by web socket
 type Response struct {
 	Type string `json:"type"`
 	Mach Machine
@@ -162,25 +157,47 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 	// opening the websocket
 	wss := NewWSsender(w, r)
 
+	// winrm and ssh connections
+	var (
+		winrmClient *winrm.Client
+		sshClient   *ssh.Client
+		sshSession  *ssh.Session
+		sshConfig   *ssh.ClientConfig
+	)
+
 	for {
 		// receive the room to load/reload with name like infa12
 		room := wss.Read()
 
-		// searching for the room nb of machines
+		// searching for the room nb of machines and connection info
 		nbmach := 0
+		var conn ConnC
+
 		for _, d := range Conf.Dpts {
 			for _, m := range d.Machines {
 				if m.Name == room.Name {
 					nbmach = m.Nb
+					conn = d.Connection
 					break
 				}
 			}
 		}
 
+		sshConfig = &ssh.ClientConfig{
+			User: conn.SshUser,
+			Auth: []ssh.AuthMethod{
+				PublicKeyFile(conn.SshPem),
+			},
+			Timeout: conn.SshTimeout,
+			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return nil
+			},
+		}
+
 		// looping throught the machines
 		for i := 01; i <= nbmach; i++ {
 
-			go func(machine int, room string, wss *WSReaderWriter) {
+			go func(machine int, room string, conn *ConnC, wss *WSReaderWriter) {
 
 				var err error
 
@@ -208,8 +225,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// trying a windows connection
 				fmt.Printf("  windows test\n")
-				endpoint := winrm.NewEndpoint(cname, Conf.Main.WinrmPort, Conf.Main.WinrmHTTPS, Conf.Main.WinrmInsecure, nil, nil, nil, Conf.Main.WinrmTimeout)
-				if winrmClient, err = winrm.NewClient(endpoint, Conf.Main.WinrmUser, Conf.Main.WinrmPass); err != nil {
+				endpoint := winrm.NewEndpoint(cname, conn.WinrmPort, conn.WinrmHTTPS, conn.WinrmInsecure, nil, nil, nil, conn.WinrmTimeout)
+				if winrmClient, err = winrm.NewClient(endpoint, conn.WinrmUser, conn.WinrmPass); err != nil {
 					panic(err)
 				}
 
@@ -234,7 +251,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// trying a linux connection
 				fmt.Printf("  linux test\n")
-				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, Conf.Main.SshPort), sshConfig); err != nil {
+				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, conn.SshPort), sshConfig); err != nil {
 					// can not dial - machine unknown
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
@@ -281,7 +298,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				wss.Send(myJSON)
 				fmt.Printf("  -> linux\n")
-			}(i, room.Name, wss)
+			}(i, room.Name, &conn, wss)
 		}
 	}
 }
@@ -316,17 +333,6 @@ func init() {
 		panic(err)
 	}
 
-	sshConfig = &ssh.ClientConfig{
-		User: Conf.Main.SshUser,
-		Auth: []ssh.AuthMethod{
-			PublicKeyFile(Conf.Main.SshPem),
-		},
-		Timeout: Conf.Main.SshTimeout,
-		HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-			return nil
-		},
-	}
-
 }
 
 func main() {
@@ -342,8 +348,11 @@ func main() {
 
 	cssBox := rice.MustFindBox("static/css")
 	cssFileServer := http.StripPrefix("/css/", http.FileServer(cssBox.HTTPBox()))
+	jsBox := rice.MustFindBox("static/js")
+	jsFileServer := http.StripPrefix("/js/", http.FileServer(jsBox.HTTPBox()))
 
 	http.Handle("/css/", cssFileServer)
+	http.Handle("/js/", jsFileServer)
 	http.HandleFunc("/socket/", SocketHandler)
 	http.HandleFunc("/", MainHandler)
 

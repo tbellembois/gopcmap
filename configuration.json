@@ -1,19 +1,21 @@
 {
     "main": {
-         "winrmPort": 5986,
-         "winrmHTTPS": true,
-         "winrmInsecure": true,
-         "winrmTimeout": 0,
-         "winrmUser": "administrateur",
-         "winrmPass": "mysecurepass",
-         "sshTimeout": 0,
-         "sshPort": 22,
-         "sshUser": "root",
-         "sshPem": "./id_rsa.pem"
     },
     "dpts": [
         {
             "title": "département info",
+            "connection": {
+                "winrmPort": 5986,
+                "winrmHTTPS": true,
+                "winrmInsecure": true,
+                "winrmTimeout": 0,
+                "winrmUser": "administrateur",
+                "winrmPass": "mysecurepass",
+                "sshTimeout": 0,
+                "sshPort": 22,
+                "sshUser": "root",
+                "sshPem": "./id_rsa.pem"
+            },
             "machines": [
                 { "name": "iutclinfa10", "nb": 18 },
                 { "name": "iutclinfa12", "nb": 10 },
@@ -30,6 +32,18 @@
         },
         {
             "title": "département rt",
+            "connection": {
+                "winrmPort": 5986,
+                "winrmHTTPS": true,
+                "winrmInsecure": true,
+                "winrmTimeout": 0,
+                "winrmUser": "administrateur",
+                "winrmPass": "mysecurepass",
+                "sshTimeout": 0,
+                "sshPort": 22,
+                "sshUser": "root",
+                "sshPem": "./id_rsa.pem"
+            },
             "machines": [
                 { "name": "iutclrtc5", "nb": 15 },
                 { "name": "iutclrtb3", "nb": 15 },
