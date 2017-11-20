@@ -62,7 +62,7 @@ type Configuration struct {
 }
 type ConfigurationMain struct {
 	WinrmPort     int           `json:"winrmPort"`
-	WinrmHTTPS    bool          `json:"winmlHTTPS"`
+	WinrmHTTPS    bool          `json:"winrmHTTPS"`
 	WinrmInsecure bool          `json:"winrmInsecure"`
 	WinrmTimeout  time.Duration `json:"winrmTimeout"`
 	WinrmUser     string        `json:"winrmUser"`
@@ -182,6 +182,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 			go func(machine int, room string, wss *WSReaderWriter) {
 
+				var err error
+
 				// building the cname
 				cname := room + fmt.Sprintf("%02d", machine)
 				// removing iutcl for the display name
@@ -194,9 +196,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf("  -> no ping\n")
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "down", Room: room}}
-					myJSON, err := json.Marshal(Resp)
-					if err != nil {
-						fmt.Println("json marshal error " + err.Error())
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Println("json marshal error " + jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -215,14 +217,14 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				//if exitCode, err = winrmClient.Run("dir", os.Stdout, os.Stderr); err != nil {
 				if exitCode, err = winrmClient.Run("dir", ioutil.Discard, os.Stderr); err != nil {
 					// machine under Linux or down
-					fmt.Printf("  -> not windows\n")
+					fmt.Printf("  -> not windows " + err.Error() + "\n")
 				} else if exitCode == 0 {
 					// machine under windows
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "windows", Room: room}}
-					myJSON, err := json.Marshal(Resp)
-					if err != nil {
-						fmt.Println("json marshal error " + err.Error())
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Println("json marshal error " + jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -236,9 +238,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					// can not dial - machine unknown
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
-					myJSON, err := json.Marshal(Resp)
-					if err != nil {
-						fmt.Println("json marshal error " + err.Error())
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Println("json marshal error " + jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -248,9 +250,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				if sshSession, err = sshClient.NewSession(); err != nil {
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
-					myJSON, err := json.Marshal(Resp)
-					if err != nil {
-						fmt.Println("json marshal error " + err.Error())
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Println("json marshal error " + jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -261,9 +263,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					// can not run command - machine probably under Linux
 					// returning the JSON
 					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
-					myJSON, err := json.Marshal(Resp)
-					if err != nil {
-						fmt.Println("json marshal error " + err.Error())
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Println("json marshal error " + jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -272,9 +274,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				// returning the JSON
 				Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "linux", Room: room}}
-				myJSON, err := json.Marshal(Resp)
-				if err != nil {
-					fmt.Println("json marshal error " + err.Error())
+				myJSON, jerr := json.Marshal(Resp)
+				if jerr != nil {
+					fmt.Println("json marshal error " + jerr.Error())
 					return
 				}
 				wss.Send(myJSON)
@@ -313,8 +315,6 @@ func init() {
 	if err = decoder.Decode(&Conf); err != nil {
 		panic(err)
 	}
-
-	fmt.Println(Conf.Main.WinrmPort)
 
 	sshConfig = &ssh.ClientConfig{
 		User: Conf.Main.SshUser,
