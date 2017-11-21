@@ -40,22 +40,22 @@ var (
 	wserr  error
 
 	// Resp is passed to the view
-	Resp Response
+	Resp WSResp
 )
 
 // json configuration
 type Config struct {
-	Main ConfigMain  `json:"main"`
-	Dpts []ConfigDpt `json:"dpts"`
+	Main ConfigMain   `json:"main"`
+	Dpts []*ConfigDpt `json:"dpts"`
 }
 type ConfigMain struct {
 	Address string // not in conf file, set up in init
 	Port    string // not in conf file, set up in init
 }
 type ConfigDpt struct {
-	Title      string       `json:"title"`
-	Connection ConfigConn   `json:"connection"`
-	Machines   []ConfigMach `json:"machines"`
+	Title      string        `json:"title"`
+	Connection ConfigConn    `json:"connection"`
+	Machines   []*ConfigMach `json:"machines"`
 }
 type ConfigConn struct {
 	WinrmPort     int           `json:"winrmPort"`
@@ -70,8 +70,9 @@ type ConfigConn struct {
 	SshPem        string        `json:"sshPem"`
 }
 type ConfigMach struct {
-	Name string `json:"name"`
-	Nb   int    `json:"nb"`
+	Name  string   `json:"name"`
+	Nb    int      `json:"nb"`
+	Range []string // not in conf file, set up in init
 }
 
 // Machine is a structure representing a machine
@@ -87,8 +88,8 @@ type Room struct {
 	NbMach int    `json:"nbmach"`
 }
 
-// Response is a structure sent to the view by JSON by web socket
-type Response struct {
+// WSResp is a structure sent to the view by JSON by web socket
+type WSResp struct {
 	Type string `json:"type"`
 	Mach Machine
 }
@@ -134,11 +135,13 @@ func PublicKeyFile(file string) ssh.AuthMethod {
 	buffer, err := ioutil.ReadFile(file)
 	if err != nil {
 		fmt.Printf("error reading ssh private key file: %s", err.Error)
+		panic(err)
 	}
 
 	key, err := ssh.ParsePrivateKey(buffer)
 	if err != nil {
 		fmt.Printf("error parsing ssh private key file: %s", err.Error)
+		panic(err)
 	}
 	return ssh.PublicKeys(key)
 }
@@ -194,8 +197,6 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// building the cname
 				cname := room + fmt.Sprintf("%02d", machine)
-				// removing iutcl for the display name
-				dname := cname[8:]
 				fmt.Printf("machine %s\n", cname)
 				// trying a ping
 				fmt.Printf("  ping test\n")
@@ -203,7 +204,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				if _, err = exec.Command("ping", "-c 1", "-W 1", cname).Output(); err != nil {
 					fmt.Printf("  -> no ping\n")
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "down", Room: room}}
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "down", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
 						fmt.Println("json marshal error " + jerr.Error())
@@ -229,7 +230,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				} else if exitCode == 0 {
 					// machine under windows
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "windows", Room: room}}
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "windows", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
 						fmt.Println("json marshal error " + jerr.Error())
@@ -241,11 +242,10 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// trying a linux connection
-				fmt.Printf("  linux test\n")
 				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, conn.SshPort), sshConfig); err != nil {
 					// can not dial - machine unknown
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
 						fmt.Println("json marshal error " + jerr.Error())
@@ -257,7 +257,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				if sshSession, err = sshClient.NewSession(); err != nil {
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
 						fmt.Println("json marshal error " + jerr.Error())
@@ -270,7 +270,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				if err = sshSession.Run("ls"); err != nil {
 					// can not run command - machine probably under Linux
 					// returning the JSON
-					Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "unknown", Room: room}}
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
 						fmt.Println("json marshal error " + jerr.Error())
@@ -281,7 +281,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					return
 				}
 				// returning the JSON
-				Resp = Response{Type: respMachine, Mach: Machine{Name: dname, OS: "linux", Room: room}}
+				Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "linux", Room: room}}
 				myJSON, jerr := json.Marshal(Resp)
 				if jerr != nil {
 					fmt.Println("json marshal error " + jerr.Error())
@@ -323,6 +323,14 @@ func init() {
 		panic(err)
 	}
 
+	// initializing machine ranges
+	for _, d := range Conf.Dpts {
+		for _, m := range d.Machines {
+			for i := 1; i <= m.Nb; i++ {
+				m.Range = append(m.Range, fmt.Sprintf("%02d", i))
+			}
+		}
+	}
 }
 
 func main() {

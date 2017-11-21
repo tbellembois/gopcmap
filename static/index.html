@@ -29,7 +29,6 @@
                 {{range .Machines}}
                 <div class="room" id="{{.Name}}">
                     <input id="nb{{.Name}}" type="hidden" value="{{.Nb}}"></input>
-
                     <div class="progress">
                         <div id="progress{{.Name}}" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="{{.Nb}}">0/{{.Nb}}</div>
                     </div>
@@ -43,6 +42,11 @@
                     </div>
 
                     <div id="{{.Name}}children" class="machines">
+                        {{$rname:=.Name}}
+                        {{range .Range}}
+                        <div id="{{$rname}}{{.}}child" class="child">
+                        </div>
+                        {{end}}
                     </div>
                 </div>
             {{end}}
@@ -90,31 +94,40 @@
              //console.log(mos);
              //console.log(mroom);
 
-             roomDiv = document.getElementById(mroom + "children");
+             //roomDiv = document.getElementById(mroom + "children");
+             childDiv = document.getElementById(mname + "child")
 
              switch(mtype) {
                  case "machine":
                      switch(mos) {
                          case "windows":
                              el = createMachineElement(mname, mos);
-                             roomDiv.appendChild(el);
+                             //roomDiv.appendChild(el);
+                             childDiv.innerHTML = "";
+                             childDiv.appendChild(el);
                              fadeIn(el);
                              break;
                          case "linux":
                              el = createMachineElement(mname, mos);
-                             roomDiv.appendChild(el);
+                             //roomDiv.appendChild(el);
+                             childDiv.innerHTML = "";
+                             childDiv.appendChild(el);
                              fadeIn(el);
                              break;
                          case "unknown":
                              mos = "question-circle";
                              el = createMachineElement(mname, mos);
-                             roomDiv.appendChild(el);
+                             //roomDiv.appendChild(el);
+                             childDiv.innerHTML = "";
+                             childDiv.appendChild(el);
                              fadeIn(el);
                              break;
                          case "down":
                              mos = "ban";
                              el = createMachineElement(mname, mos);
-                             roomDiv.appendChild(el);
+                             //roomDiv.appendChild(el);
+                             childDiv.innerHTML = "";
+                             childDiv.appendChild(el);
                              fadeIn(el);
                              break;
                      }
@@ -190,7 +203,7 @@
         var roomDiv = document.getElementById(rname + "children");
         
         resetProgress(rname);
-        roomDiv.innerHTML = "";
+        //roomDiv.innerHTML = "";
 
         // requesting the room machines
         wsock.send(JSON.stringify({ Name: rname }));
