@@ -25,7 +25,6 @@ div#dpt > div.dname {
     margin-top: 10px;
     font-size: 1.2em;
     padding: 10px;
-    border-left: 50px solid black;
 }
 div.room {
     float: left;

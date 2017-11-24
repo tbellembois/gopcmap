@@ -58,16 +58,17 @@ type ConfigDpt struct {
 	Machines   []*ConfigMach `json:"machines"`
 }
 type ConfigConn struct {
-	WinrmPort     int           `json:"winrmPort"`
-	WinrmHTTPS    bool          `json:"winrmHTTPS"`
-	WinrmInsecure bool          `json:"winrmInsecure"`
-	WinrmTimeout  time.Duration `json:"winrmTimeout"`
-	WinrmUser     string        `json:"winrmUser"`
-	WinrmPass     string        `json:"winrmPass"`
-	SshTimeout    time.Duration `json:"sshTimeout"`
-	SshPort       int           `json:"sshPort"`
-	SshUser       string        `json:"sshUser"`
-	SshPem        string        `json:"sshPem"`
+	WinrmPort     int               `json:"winrmPort"`
+	WinrmHTTPS    bool              `json:"winrmHTTPS"`
+	WinrmInsecure bool              `json:"winrmInsecure"`
+	WinrmTimeout  time.Duration     `json:"winrmTimeout"`
+	WinrmUser     string            `json:"winrmUser"`
+	WinrmPass     string            `json:"winrmPass"`
+	SshTimeout    time.Duration     `json:"sshTimeout"`
+	SshPort       int               `json:"sshPort"`
+	SshUser       string            `json:"sshUser"`
+	SshPem        string            `json:"sshPem"`
+	SshConfig     *ssh.ClientConfig // not in conf file, set up in init
 }
 type ConfigMach struct {
 	Name  string   `json:"name"`
@@ -151,14 +152,6 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 	// opening the websocket
 	wss := NewWSsender(w, r)
 
-	// winrm and ssh connections
-	var (
-		winrmClient *winrm.Client
-		sshClient   *ssh.Client
-		sshSession  *ssh.Session
-		sshConfig   *ssh.ClientConfig
-	)
-
 	for {
 		// receive the room to load/reload with name like infa12
 		room := wss.Read()
@@ -177,23 +170,17 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		sshConfig = &ssh.ClientConfig{
-			User: conn.SshUser,
-			Auth: []ssh.AuthMethod{
-				PublicKeyFile(conn.SshPem),
-			},
-			Timeout: conn.SshTimeout,
-			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-				return nil
-			},
-		}
-
 		// looping throught the machines
 		for i := 01; i <= nbmach; i++ {
 
 			go func(machine int, room string, conn *ConfigConn, wss *WSReaderWriter) {
-
-				var err error
+				// winrm and ssh connections
+				var (
+					winrmClient *winrm.Client
+					sshClient   *ssh.Client
+					sshSession  *ssh.Session
+					err         error
+				)
 
 				// building the cname
 				cname := room + fmt.Sprintf("%02d", machine)
@@ -242,7 +229,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 
 				// trying a linux connection
-				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, conn.SshPort), sshConfig); err != nil {
+				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, conn.SshPort), conn.SshConfig); err != nil {
 					// can not dial - machine unknown
 					// returning the JSON
 					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
@@ -324,7 +311,20 @@ func init() {
 	}
 
 	// initializing machine ranges
+	// and departments SshConfig
 	for _, d := range Conf.Dpts {
+
+		d.Connection.SshConfig = &ssh.ClientConfig{
+			User: d.Connection.SshUser,
+			Auth: []ssh.AuthMethod{
+				PublicKeyFile(d.Connection.SshPem),
+			},
+			Timeout: d.Connection.SshTimeout,
+			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
+				return nil
+			},
+		}
+
 		for _, m := range d.Machines {
 			for i := 1; i <= m.Nb; i++ {
 				m.Range = append(m.Range, fmt.Sprintf("%02d", i))
