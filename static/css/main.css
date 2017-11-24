@@ -19,7 +19,7 @@ div#content.waiting {
 div#content.waiting {
     cursor: wait;
 }
-div#dpt > div.dname {
+div.dpt > div.dname {
     float: left;
     padding: 15px;
     margin-top: 10px;
@@ -29,12 +29,13 @@ div#dpt > div.dname {
 div.room {
     float: left;
     width: 100%;
-    margin-top: 10px;
+    margin-left: 40px;
+    margin-top: 20px;
 }
 div.machine {
     float: left;
     position: relative;
-    margin: 5px;
+    margin: 2px;
     padding: 8px;
     text-align: center;
     font-style: italic;
