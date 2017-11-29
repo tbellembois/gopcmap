@@ -204,7 +204,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 
 				// trying a windows connection
 				fmt.Printf("  windows test\n")
-				endpoint := winrm.NewEndpoint(cname, conn.WinrmPort, conn.WinrmHTTPS, conn.WinrmInsecure, nil, nil, nil, conn.WinrmTimeout)
+				endpoint := winrm.NewEndpoint(cname, conn.WinrmPort, conn.WinrmHTTPS, conn.WinrmInsecure, nil, nil, nil, conn.WinrmTimeout*time.Second)
 				if winrmClient, err = winrm.NewClient(endpoint, conn.WinrmUser, conn.WinrmPass); err != nil {
 					panic(err)
 				}
@@ -254,6 +254,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf("  -> not linux (ssh session error) " + err.Error() + "\n")
 					return
 				}
+				defer sshSession.Close()
 				if err = sshSession.Run("ls"); err != nil {
 					// can not run command - machine probably under Linux
 					// returning the JSON
@@ -319,7 +320,7 @@ func init() {
 			Auth: []ssh.AuthMethod{
 				PublicKeyFile(d.Connection.SshPem),
 			},
-			Timeout: d.Connection.SshTimeout,
+			Timeout: d.Connection.SshTimeout * time.Second,
 			HostKeyCallback: func(hostname string, remote net.Addr, key ssh.PublicKey) error {
 				return nil
 			},

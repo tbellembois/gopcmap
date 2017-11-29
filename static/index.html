@@ -232,7 +232,8 @@
         showProgress(rname);
         resetProgress(rname);
         blockReloadButton(rname);
-
+        
+        $("#" + rname + "children").children(".child").html("<div class='machine'><h3>?</h3></div>");
         // requesting the room machines
         wsock.send(JSON.stringify({ Name: rname }));
     };
