@@ -280,6 +280,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 			}(i, room.Name, &conn, wss)
 		}
 	}
+	wss.ws.Close()
 }
 
 func MainHandler(w http.ResponseWriter, r *http.Request) {
