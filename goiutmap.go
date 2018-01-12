@@ -3,6 +3,7 @@ package main
 //go:generate rice embed-go
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -40,9 +41,6 @@ var (
 	}
 	wsconn *websocket.Conn
 	wserr  error
-
-	// Resp is passed to the view
-	Resp WSResp
 )
 
 // json configuration
@@ -60,17 +58,22 @@ type ConfigDpt struct {
 	Machines   []*ConfigMach `json:"machines"`
 }
 type ConfigConn struct {
-	WinrmPort     int               `json:"winrmPort"`
-	WinrmHTTPS    bool              `json:"winrmHTTPS"`
-	WinrmInsecure bool              `json:"winrmInsecure"`
-	WinrmTimeout  time.Duration     `json:"winrmTimeout"`
-	WinrmUser     string            `json:"winrmUser"`
-	WinrmPass     string            `json:"winrmPass"`
-	SshTimeout    time.Duration     `json:"sshTimeout"`
-	SshPort       int               `json:"sshPort"`
-	SshUser       string            `json:"sshUser"`
-	SshPem        string            `json:"sshPem"`
-	SshConfig     *ssh.ClientConfig // not in conf file, set up in init
+	WinrmPort     int                   `json:"winrmPort"`
+	WinrmHTTPS    bool                  `json:"winrmHTTPS"`
+	WinrmInsecure bool                  `json:"winrmInsecure"`
+	WinrmTimeout  time.Duration         `json:"winrmTimeout"`
+	WinrmUser     string                `json:"winrmUser"`
+	WinrmPass     string                `json:"winrmPass"`
+	SshTimeout    time.Duration         `json:"sshTimeout"`
+	SshPort       int                   `json:"sshPort"`
+	SshUser       string                `json:"sshUser"`
+	SshPem        string                `json:"sshPem"`
+	SshConfig     *ssh.ClientConfig     // not in conf file, set up in init
+	LinuxCommand  []*LinuxCommandConfig `json:"linuxCommands"`
+}
+type LinuxCommandConfig struct {
+	Name    string `json:"name"`
+	Command string `json:"command"`
 }
 type ConfigMach struct {
 	Name  string   `json:"name"`
@@ -93,8 +96,13 @@ type Room struct {
 
 // WSResp is a structure sent to the view by JSON by web socket
 type WSResp struct {
-	Type string `json:"type"`
-	Mach Machine
+	Type     string           `json:"type"`
+	Mach     Machine          `json:"mach"`
+	CommandR []*CommandResult `json:"commandr"`
+}
+type CommandResult struct {
+	Name   string `json:"name"`
+	Result string `json:"result"`
 }
 
 // WSReaderWriter is a mutex websocket writer
@@ -131,6 +139,27 @@ func NewWSsender(w http.ResponseWriter, r *http.Request) *WSReaderWriter {
 		panic("error opening socket")
 	}
 	return &WSReaderWriter{ws: wss, mux: sync.Mutex{}}
+}
+
+func executeCommand(command, hostname string, conn *ConfigConn) (string, error) {
+	var (
+		sshClient  *ssh.Client
+		sshSession *ssh.Session
+		stdoutBuf  bytes.Buffer
+		e          error
+	)
+	if sshClient, e = ssh.Dial("tcp", fmt.Sprintf("%s:%d", hostname, conn.SshPort), conn.SshConfig); e != nil {
+		return "", e
+	}
+	if sshSession, e = sshClient.NewSession(); e != nil {
+		return "", e
+	}
+	sshSession.Stdout = &stdoutBuf
+	defer sshSession.Close()
+	if e = sshSession.Run(command); e != nil {
+		return "", e
+	}
+	return stdoutBuf.String(), nil
 }
 
 // SSH key loader
@@ -179,9 +208,9 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				// winrm and ssh connections
 				var (
 					winrmClient *winrm.Client
-					sshClient   *ssh.Client
-					sshSession  *ssh.Session
+					out         string
 					err         error
+					Resp        WSResp
 				)
 
 				// building the cname
@@ -229,35 +258,8 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf("  -> windows\n")
 					return
 				}
-
-				// trying a linux connection
-				if sshClient, err = ssh.Dial("tcp", fmt.Sprintf("%s:%d", cname, conn.SshPort), conn.SshConfig); err != nil {
-					// can not dial - machine unknown
-					// returning the JSON
-					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
-					myJSON, jerr := json.Marshal(Resp)
-					if jerr != nil {
-						fmt.Println("json marshal error " + jerr.Error())
-						return
-					}
-					wss.Send(myJSON)
-					fmt.Printf("  -> not linux (ssh dial error) " + err.Error() + "\n")
-					return
-				}
-				if sshSession, err = sshClient.NewSession(); err != nil {
-					// returning the JSON
-					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
-					myJSON, jerr := json.Marshal(Resp)
-					if jerr != nil {
-						fmt.Println("json marshal error " + jerr.Error())
-						return
-					}
-					wss.Send(myJSON)
-					fmt.Printf("  -> not linux (ssh session error) " + err.Error() + "\n")
-					return
-				}
-				defer sshSession.Close()
-				if err = sshSession.Run("ls"); err != nil {
+				// trying linux
+				if out, err = executeCommand("ls", cname, conn); err != nil {
 					// can not run command - machine probably under Linux
 					// returning the JSON
 					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
@@ -270,13 +272,21 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 					fmt.Printf("  -> not linux (ssh remote command error) " + err.Error() + "\n")
 					return
 				}
-				// returning the JSON
+				// whe are in linux, performing the linux commands
 				Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "linux", Room: room}}
+				for _, c := range conn.LinuxCommand {
+					if out, err = executeCommand(c.Command, cname, conn); err != nil {
+					} else {
+						Resp.CommandR = append(Resp.CommandR, &CommandResult{Name: c.Name, Result: out})
+					}
+				}
+				// returning the JSON
 				myJSON, jerr := json.Marshal(Resp)
 				if jerr != nil {
 					fmt.Println("json marshal error " + jerr.Error())
 					return
 				}
+
 				wss.Send(myJSON)
 				fmt.Printf("  -> linux\n")
 			}(i, room.Name, &conn, wss)

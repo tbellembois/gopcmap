@@ -14,7 +14,10 @@
                 "sshTimeout": 2,
                 "sshPort": 22,
                 "sshUser": "root",
-                "sshPem": "./id_rsa.pem"
+                "sshPem": "./id_rsa.pem",
+                "linuxCommands": [
+                    { "name": "who", "command": "who" }
+                ]
             },
             "machines": [
                 { "name": "iutclinfa10", "nb": 18 },
@@ -42,7 +45,10 @@
                 "sshTimeout": 2,
                 "sshPort": 22,
                 "sshUser": "root",
-                "sshPem": "./id_rsa.pem"
+                "sshPem": "./id_rsa.pem",
+                "linuxCommands": [
+                    { "name": "who", "command": "who" }
+                ]
             },
             "machines": [
                 { "name": "iutclrtc5", "nb": 15 },

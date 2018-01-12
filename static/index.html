@@ -93,9 +93,10 @@
         wsock.onmessage = function(evt) {
              var json = JSON.parse(evt.data);
              var mtype = json.type;
-             var mname = json.Mach.name;
-             var mos = json.Mach.os;
-             var mroom = json.Mach.room;
+             var mname = json.mach.name;
+             var mos = json.mach.os;
+             var mroom = json.mach.room;
+             var commandr = json.commandr;
              //console.log(json);
              //console.log(mtype);
              //console.log(mname);
@@ -116,7 +117,7 @@
                              fadeIn(el);
                              break;
                          case "linux":
-                             el = createMachineElement(mname, mos);
+                             el = createMachineElement(mname, mos, commandr)
                              //roomDiv.appendChild(el);
                              childDiv.innerHTML = "";
                              childDiv.appendChild(el);
@@ -157,7 +158,7 @@
       tick();
     }
     // creates a machine div
-    function createMachineElement(name, os) {
+    function createMachineElement(name, os, commandr) {
         var elem = document.createElement('div');
         elem.className = "machine";
         var mname = document.createElement('div');
@@ -166,9 +167,19 @@
         var mos = document.createElement('i');
         mos.innerHTML = "&nbsp;";
         mos.className = "fa fa-" + os;
-
+        var mcommand = document.createElement('div');
+        mcommand.className = "command";
+        if(typeof commandr != 'undefined'){
+            for(var i = 0; i < commandr.length; i++) {
+                var command = commandr[i];
+                var s = document.createElement('span');
+                s.innerHTML = "<span>" + command.name + ":" + command.result + "</span><br/>"
+                mcommand.appendChild(s);
+            }
+        }
         elem.appendChild(mos);
         elem.appendChild(mname);
+        elem.appendChild(mcommand);
         return elem
     }
     function resetProgress(rname) { 
