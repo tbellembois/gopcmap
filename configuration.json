@@ -16,10 +16,12 @@
                 "sshUser": "root",
                 "sshPem": "./id_rsa.pem",
                 "linuxCommands": [
-                    { "name": "who", "command": "who" }
+                    { "name": "", "command": "if [ -z $(cd /var/lib/ansible/local; git fetch origin ; git diff --name-only master origin/master | head -1;) ]; then echo \"\"; else echo \"A-\"; fi;" },
+                    { "name": "", "command": "if [ -z $(grep -i \"failed=1\" /var/log/ansible-pull.log) ]; then echo \"\"; else echo \"A!\"; fi;" }
                 ]
             },
             "machines": [
+                { "name": "iutclinfa17", "nb": 1 },
                 { "name": "iutclinfa10", "nb": 18 },
                 { "name": "iutclinfa12", "nb": 10 },
                 { "name": "iutclinfa18", "nb": 18 },
@@ -47,7 +49,6 @@
                 "sshUser": "root",
                 "sshPem": "./id_rsa.pem",
                 "linuxCommands": [
-                    { "name": "who", "command": "who" }
                 ]
             },
             "machines": [
