@@ -49,8 +49,10 @@ type Config struct {
 	Dpts []*ConfigDpt `json:"dpts"`
 }
 type ConfigMain struct {
-	Address string // not in conf file, set up in init
-	Port    string // not in conf file, set up in init
+	Address       string // not in conf file, set up in init
+	Port          string // not in conf file, set up in init
+	NoWindowsTest bool   // not in conf file, set up in init
+	NoLinuxTest   bool   // not in conf file, set up in init
 }
 type ConfigDpt struct {
 	Title      string        `json:"title"`
@@ -217,15 +219,15 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				cname := room + fmt.Sprintf("%02d", machine)
 				fmt.Printf("machine %s\n", cname)
 				// trying a ping
-				fmt.Printf("  ping test\n")
+				fmt.Printf("  %s ping test\n", cname)
 				//var cmdOut []byte
 				if _, err = exec.Command("ping", "-c 1", "-W 1", cname).Output(); err != nil {
-					fmt.Printf("  -> no ping\n")
+					fmt.Printf("  %s -> no ping\n", cname)
 					// returning the JSON
 					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "down", Room: room}}
 					myJSON, jerr := json.Marshal(Resp)
 					if jerr != nil {
-						fmt.Println("json marshal error " + jerr.Error())
+						fmt.Printf("%s json marshal error: %s\n", cname, jerr.Error())
 						return
 					}
 					wss.Send(myJSON)
@@ -233,62 +235,67 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				//fmt.Println(cmdOut)
 
-				// trying a windows connection
-				fmt.Printf("  windows test\n")
-				endpoint := winrm.NewEndpoint(cname, conn.WinrmPort, conn.WinrmHTTPS, conn.WinrmInsecure, nil, nil, nil, conn.WinrmTimeout*time.Second)
-				if winrmClient, err = winrm.NewClient(endpoint, conn.WinrmUser, conn.WinrmPass); err != nil {
-					panic(err)
-				}
+				if !Conf.Main.NoWindowsTest {
+					// trying a windows connection
+					fmt.Printf("  %s windows test\n", cname)
+					endpoint := winrm.NewEndpoint(cname, conn.WinrmPort, conn.WinrmHTTPS, conn.WinrmInsecure, nil, nil, nil, conn.WinrmTimeout*time.Second)
+					if winrmClient, err = winrm.NewClient(endpoint, conn.WinrmUser, conn.WinrmPass); err != nil {
+						panic(err)
+					}
 
-				// trying a simple dir command
-				//if exitCode, err = winrmClient.Run("dir", os.Stdout, os.Stderr); err != nil {
-				if exitCode, err = winrmClient.Run("dir", ioutil.Discard, os.Stderr); err != nil {
-					// machine under Linux or down
-					fmt.Printf("  -> not windows " + err.Error() + "\n")
-				} else if exitCode == 0 {
-					// machine under windows
-					// returning the JSON
-					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "windows", Room: room}}
-					myJSON, jerr := json.Marshal(Resp)
-					if jerr != nil {
-						fmt.Println("json marshal error " + jerr.Error())
+					// trying a simple dir command
+					//if exitCode, err = winrmClient.Run("dir", os.Stdout, os.Stderr); err != nil {
+					if exitCode, err = winrmClient.Run("dir", ioutil.Discard, os.Stderr); err != nil {
+						// machine under Linux or down
+						fmt.Printf("  %s -> not windows: %s\n", cname, err.Error())
+					} else if exitCode == 0 {
+						// machine under windows
+						// returning the JSON
+						Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "windows", Room: room}}
+						myJSON, jerr := json.Marshal(Resp)
+						if jerr != nil {
+							fmt.Printf("%s json marshal error: %s\n", cname, jerr.Error())
+							return
+						}
+						wss.Send(myJSON)
+						fmt.Printf("  %s -> windows\n", cname)
 						return
 					}
-					wss.Send(myJSON)
-					fmt.Printf("  -> windows\n")
-					return
-				}
-				// trying linux
-				if out, err = executeCommand("ls", cname, conn); err != nil {
-					// can not run command - machine probably under Linux
-					// returning the JSON
-					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
-					myJSON, jerr := json.Marshal(Resp)
-					if jerr != nil {
-						fmt.Println("json marshal error " + jerr.Error())
-						return
-					}
-					wss.Send(myJSON)
-					fmt.Printf("  -> not linux (ssh remote command error) " + err.Error() + "\n")
-					return
-				}
-				// whe are in linux, performing the linux commands
-				Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "linux", Room: room}}
-				for _, c := range conn.LinuxCommand {
-					if out, err = executeCommand(c.Command, cname, conn); err != nil {
-					} else {
-						Resp.CommandR = append(Resp.CommandR, &CommandResult{Name: c.Name, Result: out})
-					}
-				}
-				// returning the JSON
-				myJSON, jerr := json.Marshal(Resp)
-				if jerr != nil {
-					fmt.Println("json marshal error " + jerr.Error())
-					return
 				}
 
-				wss.Send(myJSON)
-				fmt.Printf("  -> linux\n")
+				if !Conf.Main.NoLinuxTest {
+					// trying linux
+					if out, err = executeCommand("ls", cname, conn); err != nil {
+						// can not run command - machine probably under Linux
+						// returning the JSON
+						Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "unknown", Room: room}}
+						myJSON, jerr := json.Marshal(Resp)
+						if jerr != nil {
+							fmt.Printf("%s json marshal error: %s\n", cname, jerr.Error())
+							return
+						}
+						wss.Send(myJSON)
+						fmt.Printf("  %s -> not linux (ssh remote command error): %s\n", cname, err.Error())
+						return
+					}
+					// we are in linux, performing the linux commands
+					Resp = WSResp{Type: respMachine, Mach: Machine{Name: cname, OS: "linux", Room: room}}
+					for _, c := range conn.LinuxCommand {
+						if out, err = executeCommand(c.Command, cname, conn); err != nil {
+						} else {
+							Resp.CommandR = append(Resp.CommandR, &CommandResult{Name: c.Name, Result: out})
+						}
+					}
+					// returning the JSON
+					myJSON, jerr := json.Marshal(Resp)
+					if jerr != nil {
+						fmt.Printf("%s json marshal error: %s\n", cname, jerr.Error())
+						return
+					}
+
+					wss.Send(myJSON)
+					fmt.Printf("  %s -> linux\n", cname)
+				}
 			}(i, room.Name, &conn, wss)
 		}
 	}
@@ -352,9 +359,13 @@ func main() {
 	// Getting the program parameters.
 	address := flag.String("address", "localhost", "server address")
 	port := flag.String("port", "8080", "the port to listen")
+	nowindowstest := flag.Bool("nowindows", false, "disable windows test")
+	nolinuxtest := flag.Bool("nolinux", false, "disable linux test")
 	flag.Parse()
 	Conf.Main.Address = *address
 	Conf.Main.Port = *port
+	Conf.Main.NoWindowsTest = *nowindowstest
+	Conf.Main.NoLinuxTest = *nolinuxtest
 
 	fmt.Printf("address: %s port: %s", Conf.Main.Address, Conf.Main.Port)
 

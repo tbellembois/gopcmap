@@ -27,3 +27,4 @@ _testmain.go
 id_rsa.pem
 rice-box.go
 gopcmap
+configuration.json
