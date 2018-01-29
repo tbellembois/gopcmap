@@ -17,66 +17,90 @@
 <body>
 
     <div id=content>
-
-    <div id="title">IUT map</div>
-    
-    <ul class="nav nav-tabs" id="myTab" role="tablist">
-    {{range $i, $d := .Dpts}}
-        <li class="nav-item">
-            {{if gt $i 0}}
-                <a class="nav-link" id="{{.Title}}-tab" data-toggle="tab" href="#{{$i}}" role="tab" aria-controls="home" aria-selected="true">
-            {{else}}        
-                <a class="nav-link active" id="{{.Title}}-tab" data-toggle="tab" href="#{{$i}}" role="tab" aria-controls="home" aria-selected="true">
+        <img src="images/logo.png" alt="DSI UCA"> 
+        <div id="title">IUT computers map</div>
+        
+        <ul class="nav nav-tabs" id="myTab" role="tablist">
+            {{range $i, $d := .Dpts}}
+                <li class="nav-item">
+                    {{if gt $i 0}}
+                        <a class="nav-link" id="{{.Title}}-tab" data-toggle="tab" href="#{{$i}}" role="tab" aria-controls="home" aria-selected="true">
+                    {{else}}        
+                        <a class="nav-link active" id="{{.Title}}-tab" data-toggle="tab" href="#{{$i}}" role="tab" aria-controls="home" aria-selected="true">
+                    {{end}}
+                        <i class="fa fa-home" aria-hidden="true"></i>{{.Title}}
+                    </a>
+                </li>
+                &nbsp;
             {{end}}
-                <i class="fa fa-home" aria-hidden="true"></i>{{.Title}}
-            </a>
-        </li>
-        &nbsp;
+        </ul>
+        
+        <div class="tab-content" id="myTabContent">
+            {{range $i, $d := .Dpts}}
+                {{if gt $i 0}}
+                    <div class="dpt tab-pane fade" id="{{$i}}" role="tabpanel" aria-labelledby="{{.Title}}-tab">
+                {{else}}
+                    <div class="dpt tab-pane fade show active" id="{{$i}}" role="tabpanel" aria-labelledby="{{.Title}}-tab">
+                {{end}}
+
+                        <div id="rooms">
+
+                            {{range $j, $m := .Machines}}
+                                <div class="room card" id="{{.Name}}">
+                                    <div class="card-header" id="heading{{.Name}}">
+                                      <h5 class="mb-0">
+                                        {{if gt $j 0}}
+                                            <button class="btn btn-link collapsed" data-toggle="collapse" data-target="#collapse{{.Name}}" aria-expanded="false" aria-controls="collapse{{.Name}}">
+                                        {{else}}
+                                            <button class="btn btn-link" data-toggle="collapse" data-target="#collapse{{.Name}}" aria-expanded="true" aria-controls="collapse{{.Name}}">
+                                        {{end}}
+                                                {{.Name}}
+                                            </button>
+                                      </h5>
+                                    </div>
+
+                                    {{if gt $j 0}}
+                                        <div id="collapse{{.Name}}" class="collapse" aria-labelledby="heading{{.Name}}" data-parent="#rooms">
+                                    {{else}}
+                                        <div id="collapse{{.Name}}" class="collapse show" aria-labelledby="heading{{.Name}}" data-parent="#rooms">
+                                    {{end}}
+                                        <div class="card-body">
+
+                                            <input id="nb{{.Name}}" type="hidden" value="{{.Nb}}"></input>
+
+                                            <div class="progress" id="progresscontainer{{.Name}}" style="display: none;"> 
+                                                <div id="progress{{.Name}}" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="{{.Nb}}">0/{{.Nb}}</div>
+                                            </div>
+
+                                            <div class="mach">
+                                                <div class="btn-group" role="group" aria-label="...">
+                                                    <button title="reload room" id="load{{.Name}}" onclick="loadRoom({{.Name}});" type="button" class="btn btn-default">
+                                                        <i class="fa fa-refresh" aria-hidden="true"></i>
+                                                    </button>
+                                                </div>
+                                                <span class="rname">{{.Name}}</span>
+                                            </div>
+
+                                            <div id="{{.Name}}children" class="machines">
+                                                {{$rname:=.Name}}
+                                                {{range .Range}}
+                                                    <div id="{{$rname}}{{.}}child" class="child">
+                                                    </div>
+                                                {{end}}
+                                            </div>
+
+                                        </div> <!-- card-body -->
+                                    </div>
+
+                                </div> <!-- room -->
+                            {{end}}
+
+                        </div> <!-- dpt tab-pane -->
+
+        </div> <!-- myTabContent -->
+
     {{end}}
-    </ul>
-    
-    <div class="tab-content" id="myTabContent">
-    {{range $i, $d := .Dpts}}
-    {{if gt $i 0}}
-        <div class="dpt tab-pane fade" id="{{$i}}" role="tabpanel" aria-labelledby="{{.Title}}-tab">
-    {{else}}
-        <div class="dpt tab-pane fade show active" id="{{$i}}" role="tabpanel" aria-labelledby="{{.Title}}-tab">
-    {{end}}
-
-        <div id="rooms">
-
-                {{range .Machines}}
-                <div class="room" id="{{.Name}}">
-
-                    <input id="nb{{.Name}}" type="hidden" value="{{.Nb}}"></input>
-
-                    <div class="progress" id="progresscontainer{{.Name}}" style="display: none;"> 
-                        <div id="progress{{.Name}}" class="progress-bar" role="progressbar" style="width: 0%" aria-valuenow="0" aria-valuemin="0" aria-valuemax="{{.Nb}}">0/{{.Nb}}</div>
-                    </div>
-
-                    <div class="mach">
-                        <div class="btn-group" role="group" aria-label="...">
-                          <button title="reload room" id="load{{.Name}}" onclick="loadRoom({{.Name}});" type="button" class="btn btn-default"><i class="fa fa-refresh" aria-hidden="true"></i></button>
-                        </div>
-
-                        <span class="rname">{{.Name}}</span>
-                    </div>
-
-                    <div id="{{.Name}}children" class="machines">
-                        {{$rname:=.Name}}
-                        {{range .Range}}
-                        <div id="{{$rname}}{{.}}child" class="child">
-                        </div>
-                        {{end}}
-                    </div>
-                </div>
-            {{end}}
-        </div>
-
-    </div>
-    {{end}}
-
-    </div>
+    </div> <!-- content -->
 
     <script src="js/jquery.min.js"></script>
     <script src="js/popper.min.js"></script>
@@ -101,11 +125,11 @@
         var wsock = new WebSocket(url);
         wsock.onopen = function(evt) {
             console.log("connected to web socket:" + url);
-            {{range .Dpts}}
+            {{/*range .Dpts}}
                 {{range .Machines}}
                     loadRoom({{.Name}});
                 {{end}}
-            {{end}}
+            {{end*/}}
         };
         wsock.onclose = function(evt) {
             console.log("web socket closed");

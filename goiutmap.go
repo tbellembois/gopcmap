@@ -403,9 +403,12 @@ func main() {
 	cssFileServer := http.StripPrefix("/css/", http.FileServer(cssBox.HTTPBox()))
 	jsBox := rice.MustFindBox("static/js")
 	jsFileServer := http.StripPrefix("/js/", http.FileServer(jsBox.HTTPBox()))
+	imgBox := rice.MustFindBox("static/images")
+	imgFileServer := http.StripPrefix("/images/", http.FileServer(imgBox.HTTPBox()))
 
 	http.Handle("/css/", cssFileServer)
 	http.Handle("/js/", jsFileServer)
+	http.Handle("/images/", imgFileServer)
 	http.HandleFunc("/socket/", SocketHandler)
 	http.HandleFunc("/", MainHandler)
 
