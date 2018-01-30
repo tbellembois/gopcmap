@@ -43,27 +43,19 @@
                     <div class="dpt tab-pane fade show active" id="{{$i}}" role="tabpanel" aria-labelledby="{{.Title}}-tab">
                 {{end}}
 
-                        <div id="rooms">
+                    <div id="rooms{{$i}}">
 
                             {{range $j, $m := .Machines}}
                                 <div class="room card" id="{{.Name}}">
-                                    <div class="card-header" id="heading{{.Name}}">
+                                    <div class="card-header" id="heading{{$i}}{{$j}}">
                                       <h5 class="mb-0">
-                                        {{if gt $j 0}}
-                                            <button class="btn btn-link collapsed" data-toggle="collapse" data-target="#collapse{{.Name}}" aria-expanded="false" aria-controls="collapse{{.Name}}">
-                                        {{else}}
-                                            <button class="btn btn-link" data-toggle="collapse" data-target="#collapse{{.Name}}" aria-expanded="true" aria-controls="collapse{{.Name}}">
-                                        {{end}}
-                                                {{.Name}}
-                                            </button>
+                                        <button class="btn btn-link collapsed" data-toggle="collapse" data-target="#collapse{{$i}}{{$j}}" aria-expanded="false" aria-controls="collapse{{$i}}{{$j}}" onclick="loadRoom({{.Name}});">
+                                            {{.Name}}
+                                        </button>
                                       </h5>
                                     </div>
 
-                                    {{if gt $j 0}}
-                                        <div id="collapse{{.Name}}" class="collapse" aria-labelledby="heading{{.Name}}" data-parent="#rooms">
-                                    {{else}}
-                                        <div id="collapse{{.Name}}" class="collapse show" aria-labelledby="heading{{.Name}}" data-parent="#rooms">
-                                    {{end}}
+                                    <div id="collapse{{$i}}{{$j}}" class="collapse" aria-labelledby="heading{{$i}}{{$j}}" data-parent="#rooms{{$i}}">
                                         <div class="card-body">
 
                                             <input id="nb{{.Name}}" type="hidden" value="{{.Nb}}"></input>
@@ -74,11 +66,10 @@
 
                                             <div class="mach">
                                                 <div class="btn-group" role="group" aria-label="...">
-                                                    <button title="reload room" id="load{{.Name}}" onclick="loadRoom({{.Name}});" type="button" class="btn btn-default">
+                                                    <button title="reload room" id="load{{.Name}}" onclick="loadRoom({{.Name}});" type="button" class="btn btn-sm">
                                                         <i class="fa fa-refresh" aria-hidden="true"></i>
                                                     </button>
                                                 </div>
-                                                <span class="rname">{{.Name}}</span>
                                             </div>
 
                                             <div id="{{.Name}}children" class="machines">
