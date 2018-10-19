@@ -13,12 +13,14 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path"
 	"sync"
 	"time"
 
 	rice "github.com/GeertJohan/go.rice"
 	"github.com/gorilla/websocket"
 	"github.com/masterzen/winrm"
+	"github.com/satori/go.uuid"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/crypto/ssh"
 )
@@ -49,8 +51,9 @@ type Config struct {
 	Dpts []*ConfigDpt `json:"dpts"`
 }
 type ConfigMain struct {
-	Address       string // not in conf file, set up in init
-	Port          string // not in conf file, set up in init
+	AppScheme     string // not in conf file, set up in init
+	AppBasePath   string // not in conf file, set up in init
+	AppLocation   string // not in conf file, set up in init
 	NoWindowsTest bool   // not in conf file, set up in init
 	NoLinuxTest   bool   // not in conf file, set up in init
 	NoPingTest    bool   // not in conf file, set up in init
@@ -110,28 +113,35 @@ type CommandResult struct {
 
 // WSReaderWriter is a mutex websocket writer
 type WSReaderWriter struct {
-	ws  *websocket.Conn
-	mux sync.Mutex
+	uuid uuid.UUID
+	ws   *websocket.Conn
+	muxr sync.Mutex
+	muxw sync.Mutex
 }
 
 // Send writes the json to the websocket
-func (wss *WSReaderWriter) Send(json []byte) {
-	wss.mux.Lock()
+func (wss *WSReaderWriter) Send(json []byte) error {
+	wss.muxw.Lock()
+	defer wss.muxw.Unlock()
 	err = wss.ws.WriteMessage(websocket.TextMessage, json)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
+		return err
 	}
-	wss.mux.Unlock()
+	return nil
 }
 
 // Read reads the json from the websocket
-func (wss *WSReaderWriter) Read() *Room {
+func (wss *WSReaderWriter) Read() (*Room, error) {
+	wss.muxr.Lock()
+	defer wss.muxr.Unlock()
 	r := Room{}
 	err := wss.ws.ReadJSON(&r)
 	if err != nil {
-		fmt.Println(err)
+		log.Error(err)
+		return nil, err
 	}
-	return &r
+	return &r, nil
 }
 
 // WSReaderWriter constructor
@@ -139,9 +149,10 @@ func NewWSsender(w http.ResponseWriter, r *http.Request) *WSReaderWriter {
 	// opening the websocket
 	wss, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		panic("error opening socket")
+		panic("error opening socket:" + err.Error())
 	}
-	return &WSReaderWriter{ws: wss, mux: sync.Mutex{}}
+	u := uuid.Must(uuid.NewV4())
+	return &WSReaderWriter{uuid: u, ws: wss, muxr: sync.Mutex{}}
 }
 
 func executeCommand(command, hostname string, conn *ConfigConn) (string, error) {
@@ -193,9 +204,20 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 	// opening the websocket
 	wss := NewWSsender(w, r)
 
+	defer func() {
+		log.Debug("closing websocket:" + wss.uuid.String())
+		wss.ws.Close()
+	}()
+
 	for {
+		log.Debug("entered SocketHandler loop with WSsender:" + wss.uuid.String())
 		// receive the room to load/reload with name like infa12
-		room := wss.Read()
+		room, err := wss.Read()
+		if err != nil {
+			log.Debug("closing websocket on read error:" + wss.uuid.String())
+			wss.ws.Close()
+			break
+		}
 
 		// searching for the room nb of machines and connection info
 		nbmach := 0
@@ -215,6 +237,7 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 		for i := 01; i <= nbmach; i++ {
 
 			go func(machine int, room string, conn *ConfigConn, wss *WSReaderWriter) {
+
 				// winrm and ssh connections
 				var (
 					winrmClient *winrm.Client
@@ -240,7 +263,12 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 							log.Debug(fmt.Sprintf("%s json marshal error: %s\n", cname, jerr.Error()))
 							return
 						}
-						wss.Send(myJSON)
+						err := wss.Send(myJSON)
+						if err != nil {
+							log.Debug("closing websocket on write error:" + wss.uuid.String())
+							wss.ws.Close()
+							return
+						}
 						return
 					}
 					//fmt.Println(cmdOut)
@@ -273,7 +301,12 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 							log.Debug(fmt.Sprintf("%s json marshal error: %s\n", cname, jerr.Error()))
 							return
 						}
-						wss.Send(myJSON)
+						err := wss.Send(myJSON)
+						if err != nil {
+							log.Debug("closing websocket on write error:" + wss.uuid.String())
+							wss.ws.Close()
+							return
+						}
 						log.Debug(fmt.Sprintf("  %s -> windows at %s\n", cname, time.Now()))
 						return
 					}
@@ -291,8 +324,13 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 							log.Debug(fmt.Sprintf("%s json marshal error: %s\n", cname, jerr.Error()))
 							return
 						}
-						wss.Send(myJSON)
-						log.Debug(fmt.Sprintf("  %s -> not linux (ssh remote command error) at %s: %s\n", cname, time.Now(), err.Error()))
+						err := wss.Send(myJSON)
+						if err != nil {
+							log.Debug("closing websocket on write error:" + wss.uuid.String())
+							wss.ws.Close()
+							return
+						}
+						log.Debug(fmt.Sprintf("  %s -> not linux (ssh remote command error) at %s: \n", cname, time.Now()))
 						return
 					}
 					// we are in linux, performing the linux commands
@@ -313,16 +351,20 @@ func SocketHandler(w http.ResponseWriter, r *http.Request) {
 						return
 					}
 
-					wss.Send(myJSON)
+					err := wss.Send(myJSON)
+					if err != nil {
+						log.Debug("closing websocket on write error:" + wss.uuid.String())
+						wss.ws.Close()
+						return
+					}
 					log.Debug(fmt.Sprintf("  %s -> linux at %s\n", cname, time.Now()))
 				}
 			}(i, room.Name, &conn, wss)
 		}
 	}
-	wss.ws.Close()
 }
 
-func MainHandler(w http.ResponseWriter, r *http.Request) {
+func (c *Config) MainHandler(w http.ResponseWriter, r *http.Request) {
 	staticBox := rice.MustFindBox("static")
 
 	// Building the HTML template.
@@ -331,7 +373,7 @@ func MainHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	err = htmlTmp.Execute(w, Conf)
+	err = htmlTmp.Execute(w, c)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -374,18 +416,30 @@ func init() {
 	}
 }
 
+// request logger
+func logRequest(handler http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		//log.Debug(fmt.Sprintf("%s %s %s\n", r.RemoteAddr, r.Method, r.URL))
+		handler.ServeHTTP(w, r)
+	})
+}
+
 func main() {
 
 	// Getting the program parameters.
-	address := flag.String("address", "localhost", "server address")
-	port := flag.String("port", "8080", "the port to listen")
+	listenPort := flag.String("port", "8081", "the port to listen")
+	appScheme := flag.String("scheme", "http", "the application scheme, http or https")
+	appBasePath := flag.String("base", "localhost:"+*listenPort, "the application base URL (such as localhost:8081)")
+	appLocation := flag.String("location", "", "the application location with no leading or trailing / (such as gopcmap)")
+
 	nowindowstest := flag.Bool("nowindows", false, "disable windows test")
 	nolinuxtest := flag.Bool("nolinux", false, "disable linux test")
 	nopingtest := flag.Bool("noping", false, "disable ping test")
 	debug := flag.Bool("debug", false, "debug (verbose log), default is error")
 	flag.Parse()
-	Conf.Main.Address = *address
-	Conf.Main.Port = *port
+	Conf.Main.AppScheme = *appScheme
+	Conf.Main.AppBasePath = *appBasePath
+	Conf.Main.AppLocation = *appLocation
 	Conf.Main.NoWindowsTest = *nowindowstest
 	Conf.Main.NoLinuxTest = *nolinuxtest
 	Conf.Main.NoPingTest = *nopingtest
@@ -397,22 +451,48 @@ func main() {
 		log.SetLevel(log.ErrorLevel)
 	}
 
-	log.Info(fmt.Sprintf("address: %s port: %s", Conf.Main.Address, Conf.Main.Port))
+	log.Info(fmt.Sprintf("AppBasePath: %s AppLocation: %s", Conf.Main.AppBasePath, Conf.Main.AppLocation))
 
 	cssBox := rice.MustFindBox("static/css")
-	cssFileServer := http.StripPrefix("/css/", http.FileServer(cssBox.HTTPBox()))
+	locationCSS := "/css/"
+	if *appLocation != "" {
+		locationCSS = path.Join("/", *appLocation, "css")
+		locationCSS += "/"
+	}
+	cssFileServer := http.StripPrefix(locationCSS, http.FileServer(cssBox.HTTPBox()))
+	http.Handle(locationCSS, cssFileServer)
+
+	// serving js
 	jsBox := rice.MustFindBox("static/js")
-	jsFileServer := http.StripPrefix("/js/", http.FileServer(jsBox.HTTPBox()))
+	locationJS := "/js/"
+	if *appLocation != "" {
+		locationJS = path.Join("/", *appLocation, "js")
+		locationJS += "/"
+	}
+	jsFileServer := http.StripPrefix(locationJS, http.FileServer(jsBox.HTTPBox()))
+	http.Handle(locationJS, jsFileServer)
+
+	// serving img
 	imgBox := rice.MustFindBox("static/images")
-	imgFileServer := http.StripPrefix("/images/", http.FileServer(imgBox.HTTPBox()))
+	locationIMG := "/images/"
+	if *appLocation != "" {
+		locationIMG = path.Join("/", *appLocation, "images")
+		locationIMG += "/"
+	}
+	imgFileServer := http.StripPrefix(locationIMG, http.FileServer(imgBox.HTTPBox()))
+	http.Handle(locationIMG, imgFileServer)
 
-	http.Handle("/css/", cssFileServer)
-	http.Handle("/js/", jsFileServer)
-	http.Handle("/images/", imgFileServer)
-	http.HandleFunc("/socket/", SocketHandler)
-	http.HandleFunc("/", MainHandler)
+	// serving websocket
+	locationsocket := "/socket/"
+	if *appLocation != "" {
+		locationsocket = path.Join("/", *appLocation, "socket")
+		locationsocket += "/"
+	}
+	http.HandleFunc(locationsocket, SocketHandler)
 
-	if err = http.ListenAndServe(Conf.Main.Address+":"+Conf.Main.Port, nil); err != nil {
-		panic(err)
+	http.HandleFunc("/", Conf.MainHandler)
+
+	if err = http.ListenAndServe(":"+*listenPort, logRequest(http.DefaultServeMux)); err != nil {
+		log.Fatal(err)
 	}
 }

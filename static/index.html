@@ -8,16 +8,16 @@
 
   <title>goiutmap</title>
 
-  <link rel="stylesheet" type="text/css" href="/css/font-awesome/css/font-awesome.min.css">
-  <link rel="stylesheet" type="text/css" href="/css/bootstrap.min.css">
-  <link rel="stylesheet" type="text/css" href="/css/bootstrap-theme.min.css">
-  <link rel="stylesheet" type="text/css" href="/css/main.css">
+  <link rel="stylesheet" type="text/css" href="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/css/font-awesome/css/font-awesome.min.css">
+  <link rel="stylesheet" type="text/css" href="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/css/bootstrap.min.css">
+  <link rel="stylesheet" type="text/css" href="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/css/bootstrap-theme.min.css">
+  <link rel="stylesheet" type="text/css" href="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/css/main.css">
 </head>
 
 <body>
 
     <div id=content>
-        <img src="images/logo.png" alt="DSI UCA"> 
+        <img src="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/images/logo.png" alt="DSI UCA"> 
         <div id="title">IUT computers map</div>
         
         <ul class="nav nav-tabs" id="myTab" role="tablist">
@@ -93,9 +93,9 @@
     {{end}}
     </div> <!-- content -->
 
-    <script src="js/jquery.min.js"></script>
-    <script src="js/popper.min.js"></script>
-    <script src="js/bootstrap.min.js"></script>
+    <script src="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/js/jquery.min.js"></script>
+    <script src="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/js/popper.min.js"></script>
+    <script src="{{.Main.AppScheme}}://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/js/bootstrap.min.js"></script>
 
     <script>
     // HTML elements    
@@ -111,8 +111,12 @@
         } else {
             wsproto = "ws";
         }
-        url = wsproto + "://{{.Main.Address}}:{{.Main.Port}}/socket/";
-        
+        if ( "{{.Main.AppLocation}}" != "") {
+            url = wsproto + "://{{.Main.AppBasePath}}/{{.Main.AppLocation}}/socket/";
+        } else {
+            url = wsproto + "://{{.Main.AppBasePath}}/socket/";
+        }
+
         var wsock = new WebSocket(url);
         wsock.onopen = function(evt) {
             console.log("connected to web socket:" + url);
